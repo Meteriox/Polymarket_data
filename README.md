@@ -4,7 +4,7 @@
 
 <h3>Complete Data Infrastructure for Polymarket — Fetch, Process, Analyze</h3>
 
-<p>
+<p style="max-width: 600px; margin: 0 auto;">
 A comprehensive toolkit and dataset for Polymarket prediction markets. Fetch trading data directly from Polygon blockchain and Gamma API, process into multiple analysis-ready formats, and analyze with ease.
 </p>
 
