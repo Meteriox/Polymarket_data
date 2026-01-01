@@ -9,11 +9,11 @@ A comprehensive toolkit and dataset for Polymarket prediction markets. Fetch tra
 </p>
 
 <p>
-<b>Zhengjie Wang</b><sup>1,2</sup>, <b>Leiyu Chao</b><sup>1,3</sup>, <b>Yikang Li</b><sup>1,†</sup>
+<b>Zhengjie Wang</b><sup>1,2</sup>, <b>Leiyu Chao</b><sup>1,3</sup>, <b>Yu Bao</b><sup>1,4</sup>, <b>Lian Cheng</b><sup>1,3</sup>, <b>Jianhan Liao</b><sup>1,5</sup>, <b>Yikang Li</b><sup>1,†</sup>
 </p>
 
 <p>
-<sup>1</sup>Shanghai Innovation Institute &nbsp;&nbsp; <sup>2</sup>Westlake University &nbsp;&nbsp; <sup>3</sup>Shanghai Jiao Tong University
+<sup>1</sup>Shanghai Innovation Institute &nbsp;&nbsp; <sup>2</sup>Westlake University &nbsp;&nbsp; <sup>3</sup>Shanghai Jiao Tong University &nbsp;&nbsp; <sup>4</sup>Harbin Institute of Technology &nbsp;&nbsp; <sup>5</sup>Fudan University
 </p>
 
 <p>
@@ -512,7 +512,7 @@ If you use this dataset or toolkit in your research, please cite:
 ```bibtex
 @misc{polymarket_data_2026,
   title={Polymarket Data: Complete Data Infrastructure for Polymarket},
-  author={Wang, Zhengjie and Chao, Leiyu and Li, Yikang},
+  author={Wang, Zhengjie and Chao, Leiyu and Bao, Yu and Cheng, Lian and Liao, Jianhan and Li, Yikang},
   year={2026},
   howpublished={\url{https://huggingface.co/datasets/SII-WANGZJ/Polymarket_data}},
   note={A comprehensive dataset and toolkit for Polymarket prediction markets}
