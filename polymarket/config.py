@@ -19,11 +19,19 @@ DATASET_DIR = DATA_DIR / 'dataset'
 # 最新结果目录 (csv 预览数据)
 LATEST_RESULT_DIR = DATA_DIR / 'latest_result'
 
-# Parquet 完整数据文件 (存放于 data/dataset/)
-DECODED_EVENTS_FILE = DATASET_DIR / 'orderfilled.parquet'
-MARKETS_FILE = DATASET_DIR / 'markets.parquet'
-MISSING_MARKETS_FILE = DATASET_DIR / 'missing_markets.parquet'
-TRADES_OUTPUT_FILE = DATASET_DIR / 'trades.parquet'
+# Parquet 完整数据文件
+# 搜索顺序: data/ -> data/dataset/（兼容两种目录布局）
+def _find_parquet(name: str, dirs=(DATA_DIR, DATASET_DIR)) -> Path:
+    for d in dirs:
+        p = d / name
+        if p.exists():
+            return p
+    return dirs[0] / name  # fallback to data/<name>
+
+DECODED_EVENTS_FILE = _find_parquet('orderfilled.parquet')
+MARKETS_FILE = _find_parquet('markets.parquet')
+MISSING_MARKETS_FILE = _find_parquet('missing_markets.parquet')
+TRADES_OUTPUT_FILE = _find_parquet('trades.parquet')
 
 # CSV 预览文件 (存放于 data/latest_result/)
 MARKETS_PREVIEW_FILE = LATEST_RESULT_DIR / 'markets.csv'
@@ -50,7 +58,7 @@ DUCKDB_FILE = DATA_DIR / 'polymarket.duckdb'
 # ============== 区块链 ==============
 
 POLYGON_CHAIN_ID = 137
-POLYGON_RPC_URL = os.getenv('POLYGON_RPC_URL', 'https://polygon-rpc.com')
+POLYGON_RPC_URL = os.getenv('POLYGON_RPC_URL', 'https://polygon.llamarpc.com')
 
 
 def get_rpc_url(use_alchemy: bool = False) -> str:

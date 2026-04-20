@@ -10,7 +10,7 @@ services:
       - ./logs:/app/logs
     environment:
       ALCHEMY_API_KEY: ${ALCHEMY_API_KEY:-}
-      POLYGON_RPC_URL: ${POLYGON_RPC_URL:-https://polygon-rpc.com}
+      POLYGON_RPC_URL: ${POLYGON_RPC_URL:-https://polygon.llamarpc.com}
       BATCH_SIZE: ${BATCH_SIZE:-100}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     command: ["--host", "0.0.0.0", "--port", "8000", "--batch-size", "${BATCH_SIZE:-100}"]
