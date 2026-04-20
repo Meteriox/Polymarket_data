@@ -64,12 +64,11 @@ class DuckDBWriter:
         self.conn.execute("INSERT INTO orderfilled_new SELECT * FROM df")
         self.row_counts['orderfilled'] += len(df)
 
-    def write_trades(self, trades: list):
-        if not trades:
+    def write_trades(self, trades_df: pd.DataFrame):
+        if trades_df is None or len(trades_df) == 0:
             return
-        df = pd.DataFrame(trades)
-        self.conn.execute("INSERT INTO trades_new SELECT * FROM df")
-        self.row_counts['trades'] += len(df)
+        self.conn.execute("INSERT INTO trades_new SELECT * FROM trades_df")
+        self.row_counts['trades'] += len(trades_df)
 
     def write_quant(self, quant_df: pd.DataFrame):
         if quant_df is None or len(quant_df) == 0:
@@ -147,14 +146,13 @@ class ContinuousFetcher:
 
             logger.info(f"  Decoded {len(events)} events")
 
-            trades = extract_trades(events)
-            logger.info(f"  Extracted {len(trades)} trades")
+            trades_df = extract_trades(events)
+            logger.info(f"  Extracted {len(trades_df)} trades")
 
             self.writer.write_events(events)
-            self.writer.write_trades(trades)
+            self.writer.write_trades(trades_df)
 
-            if trades:
-                trades_df = pd.DataFrame(trades)
+            if not trades_df.empty:
                 quant_df = clean_trades_df(trades_df)
                 users_df = clean_users_df(trades_df)
                 self.writer.write_quant(quant_df)
