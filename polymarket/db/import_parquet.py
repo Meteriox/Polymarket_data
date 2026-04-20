@@ -36,6 +36,61 @@ IMPORT_MAP = [
 ]
 
 
+def _sql_quote(value: str) -> str:
+    return value.replace("'", "''")
+
+
+def _quote_ident(name: str) -> str:
+    return f'"{name.replace(chr(34), chr(34) * 2)}"'
+
+
+def _canonical_col(name: str) -> str:
+    """Normalize column name for loose matching."""
+    return "".join(ch for ch in name.lower() if ch.isalnum())
+
+
+def _build_read_parquet_expr(parquet_paths: list[Path]) -> str:
+    path_list_sql = ", ".join(f"'{_sql_quote(str(path))}'" for path in parquet_paths)
+    return f"read_parquet([{path_list_sql}], union_by_name=true)"
+
+
+def _build_aligned_select(
+    conn: duckdb.DuckDBPyConnection,
+    table: str,
+    parquet_paths: list[Path],
+) -> str:
+    """Build SELECT list aligned to target table schema."""
+    source_scan = _build_read_parquet_expr(parquet_paths)
+
+    source_cols = conn.execute(
+        f"DESCRIBE SELECT * FROM {source_scan}"
+    ).fetchall()
+    source_by_canonical = {
+        _canonical_col(name): name
+        for name, *_ in source_cols
+    }
+
+    target_cols = conn.execute(f"PRAGMA table_info('{table}')").fetchall()
+
+    select_exprs: list[str] = []
+    for _, col_name, col_type, *_ in target_cols:
+        canonical = _canonical_col(col_name)
+        if canonical in source_by_canonical:
+            source_name = source_by_canonical[canonical]
+            select_exprs.append(
+                f"{_quote_ident(source_name)} AS {_quote_ident(col_name)}"
+            )
+        else:
+            logger.warning(
+                f"    Missing source column for {table}.{col_name}, filling NULL"
+            )
+            select_exprs.append(
+                f"CAST(NULL AS {col_type}) AS {_quote_ident(col_name)}"
+            )
+
+    return f"SELECT {', '.join(select_exprs)} FROM {source_scan}"
+
+
 def _resolve_parquet_sources(
     table: str,
     filename_patterns: list[str],
@@ -86,11 +141,12 @@ def import_table(
     logger.info(f"  Importing {table} from {file_count} file(s): {file_list}")
     t0 = time.time()
 
-    path_list_sql = ", ".join(f"'{str(path)}'" for path in parquet_paths)
+    aligned_select = _build_aligned_select(conn, table, parquet_paths)
+
     conn.execute(
         f"""
         INSERT INTO {table}
-        SELECT * FROM read_parquet([{path_list_sql}])
+        {aligned_select}
         """
     )
 
