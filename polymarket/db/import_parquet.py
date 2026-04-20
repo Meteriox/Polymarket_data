@@ -54,6 +54,31 @@ def _build_read_parquet_expr(parquet_paths: list[Path]) -> str:
     return f"read_parquet([{path_list_sql}], union_by_name=true)"
 
 
+def _build_cast_expr(source_name: str, target_type: str) -> str:
+    """Build a tolerant cast expression to avoid import aborts on legacy types."""
+    source = _quote_ident(source_name)
+    normalized = target_type.upper()
+
+    integer_types = {
+        "TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT",
+        "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT",
+    }
+    if normalized in integer_types:
+        # Some legacy parquet files store uint-like fields as BLOB.
+        # Try normal cast first, then varchar parse, then hex decode fallback.
+        return (
+            "COALESCE("
+            f"TRY_CAST({source} AS {target_type}), "
+            f"TRY_CAST(CAST({source} AS VARCHAR) AS {target_type}), "
+            f"CASE WHEN typeof({source}) = 'BLOB' "
+            f"THEN TRY_CAST(('0x' || hex({source})) AS {target_type}) "
+            "ELSE NULL END"
+            ")"
+        )
+
+    return f"TRY_CAST({source} AS {target_type})"
+
+
 def _build_aligned_select(
     conn: duckdb.DuckDBPyConnection,
     table: str,
@@ -78,7 +103,7 @@ def _build_aligned_select(
         if canonical in source_by_canonical:
             source_name = source_by_canonical[canonical]
             select_exprs.append(
-                f"{_quote_ident(source_name)} AS {_quote_ident(col_name)}"
+                f"{_build_cast_expr(source_name, col_type)} AS {_quote_ident(col_name)}"
             )
         else:
             logger.warning(
