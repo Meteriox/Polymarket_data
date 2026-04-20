@@ -153,8 +153,14 @@ def get_connection() -> duckdb.DuckDBPyConnection:
 
 
 def get_readonly_connection() -> duckdb.DuckDBPyConnection:
-    """Create a new read-only connection for API queries."""
-    return duckdb.connect(str(DB_PATH), read_only=True)
+    """Create a cursor from the main connection for API queries.
+
+    DuckDB does not allow mixing read-write and read-only connections
+    to the same file. Instead we create cursors from the singleton
+    write connection — each cursor is safe to use from its own thread.
+    """
+    conn = get_connection()
+    return conn.cursor()
 
 
 def close_connection():
