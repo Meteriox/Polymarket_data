@@ -61,26 +61,26 @@ class DuckDBWriter:
         if not events:
             return
         df = pd.DataFrame(events)
-        self.conn.execute("INSERT INTO orderfilled SELECT * FROM df")
+        self.conn.execute("INSERT INTO orderfilled_new SELECT * FROM df")
         self.row_counts['orderfilled'] += len(df)
 
     def write_trades(self, trades: list):
         if not trades:
             return
         df = pd.DataFrame(trades)
-        self.conn.execute("INSERT INTO trades SELECT * FROM df")
+        self.conn.execute("INSERT INTO trades_new SELECT * FROM df")
         self.row_counts['trades'] += len(df)
 
     def write_quant(self, quant_df: pd.DataFrame):
         if quant_df is None or len(quant_df) == 0:
             return
-        self.conn.execute("INSERT INTO quant SELECT * FROM quant_df")
+        self.conn.execute("INSERT INTO quant_new SELECT * FROM quant_df")
         self.row_counts['quant'] += len(quant_df)
 
     def write_users(self, users_df: pd.DataFrame):
         if users_df is None or len(users_df) == 0:
             return
-        self.conn.execute("INSERT INTO users SELECT * FROM users_df")
+        self.conn.execute("INSERT INTO users_new SELECT * FROM users_df")
         self.row_counts['users'] += len(users_df)
 
     def summary(self) -> str:

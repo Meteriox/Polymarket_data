@@ -16,12 +16,11 @@ services:
     command: ["--host", "0.0.0.0", "--port", "8000", "--batch-size", "${BATCH_SIZE:-100}"]
     stop_grace_period: 30s
 
-  import:
+  verify:
     build: .
-    container_name: polymarket-import
+    container_name: polymarket-verify
     profiles:
-      - import
+      - tools
     volumes:
       - ./data:/app/data
     entrypoint: ["python", "-m", "polymarket.db.import_parquet"]
-    command: ["--skip-existing"]

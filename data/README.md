@@ -6,34 +6,43 @@ This directory stores all Polymarket data.
 
 ```
 data/
-├── polymarket.duckdb          # DuckDB database (main data store)
-├── dataset/                   # Parquet files (for initial import)
-│   ├── orderfilled.parquet
-│   ├── trades.parquet
-│   └── markets.parquet
-├── data_clean/                # Cleaned parquet files (for initial import)
-│   ├── quant.parquet
-│   └── users.parquet
-└── latest_result/             # CSV preview (latest 1000 records)
+├── polymarket.duckdb          # DuckDB database (indexes + new data only)
+├── orderfilled_part1.parquet  # Historical data (queried directly, not imported)
+├── orderfilled_part2.parquet
+├── ...
+├── trades.parquet
+├── markets.parquet
+├── quant.parquet
+├── users.parquet
+├── dataset/                   # Alternative location for parquet files
+└── data_clean/                # Alternative location for parquet files
 ```
+
+## How It Works
+
+Parquet files are **NOT imported** into DuckDB. Instead, DuckDB creates VIEWs
+that query them directly at runtime. This avoids the massive memory/CPU cost
+of importing 100+GB of data.
+
+- Historical data: queried from parquet files via DuckDB VIEWs (zero import)
+- New data: written to `_new` tables in DuckDB by the continuous fetcher
+- API queries: hit unified VIEWs that UNION ALL both sources transparently
 
 ## Setup
 
-1. Download parquet data from HuggingFace and place them in the directories above
-2. Import into DuckDB: `docker compose run --rm import`
-3. Start the service: `docker compose up -d --build`
-4. API docs: http://localhost:8000/docs
-5. Parquet files can be deleted after import to save space
+1. Download parquet files from HuggingFace and place them here
+2. Start the service: `docker compose up -d --build`
+3. API docs: http://localhost:8000/docs
 
 ## DuckDB Tables
 
 | Table | Description |
 |-------|-------------|
-| `orderfilled` | Raw blockchain OrderFilled events |
-| `trades` | Processed trades with market metadata |
-| `markets` | Market information from Gamma API |
-| `quant` | Clean market data (unified YES perspective) |
-| `users` | User behavior data (maker/taker split) |
+| `orderfilled` | VIEW: parquet + orderfilled_new |
+| `trades` | VIEW: parquet + trades_new |
+| `markets` | VIEW: parquet + markets_new |
+| `quant` | VIEW: parquet + quant_new |
+| `users` | VIEW: parquet + users_new |
 
 ## Note
 

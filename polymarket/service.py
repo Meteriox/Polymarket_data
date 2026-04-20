@@ -21,7 +21,7 @@ import time
 
 import uvicorn
 
-from polymarket.db.engine import get_connection, close_connection
+from polymarket.db.engine import get_connection, close_connection, register_parquet_views
 from polymarket.db.schema import init_schema
 from polymarket.api.app import create_app
 from polymarket.tools.continuous_fetch import ContinuousFetcher
@@ -75,6 +75,9 @@ def main():
 
     conn = get_connection()
     init_schema(conn)
+
+    logger.info("Registering parquet views...")
+    register_parquet_views(conn)
 
     signal.signal(signal.SIGTERM, _shutdown_handler)
     signal.signal(signal.SIGINT, _shutdown_handler)

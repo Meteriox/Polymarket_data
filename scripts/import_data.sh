@@ -1,27 +1,20 @@
 #!/bin/bash
-# Import parquet files into DuckDB via Docker Compose
+# Verify parquet data availability and register DuckDB views
 #
 # Usage:
-#   ./scripts/import_data.sh                   # Import all parquet files
-#   ./scripts/import_data.sh --skip-existing   # Skip tables that already have data
+#   ./scripts/import_data.sh   # Verify data and show row counts
 
 set -e
 
 echo "=============================================="
-echo "  Polymarket Data Import"
+echo "  Polymarket Data Verification"
 echo "=============================================="
 echo ""
 
-# Ensure .env exists
-[ -f .env ] || cp .env.example .env
-
 # Create data directories
-mkdir -p data data/dataset data/data_clean
+mkdir -p data logs
 
-# Check for parquet files in common locations:
-# - data/
-# - data/dataset/
-# - data/data_clean/
+# Check for parquet files
 PARQUET_COUNT=$(python3 - <<'PY'
 from pathlib import Path
 
@@ -46,11 +39,7 @@ if [ "$PARQUET_COUNT" -eq 0 ]; then
     echo ""
     echo "Download data first:"
     echo "  pip install huggingface_hub"
-    echo "  hf download SII-WANGZJ/Polymarket_data --repo-type dataset --local-dir data/dataset"
-    echo ""
-    echo "Supported layouts:"
-    echo "  1) Put all parquet files directly under data/"
-    echo "  2) Split files between data/dataset and data/data_clean"
+    echo "  hf download SII-WANGZJ/Polymarket_data --repo-type dataset --local-dir data"
     echo ""
     echo "Then run this script again."
     exit 1
@@ -59,11 +48,8 @@ fi
 echo "Found $PARQUET_COUNT parquet file(s)"
 echo ""
 
-# Run import via the import profile
-docker compose run --rm import "$@"
+docker compose run --rm --profile tools verify "$@"
 
 echo ""
-echo "Import complete."
-echo ""
 echo "Next steps:"
-echo "  Start the service: ./scripts/continuous_start.sh"
+echo "  Start the service: docker compose up -d --build"

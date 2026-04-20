@@ -94,7 +94,7 @@ We provide **107GB of trading data** from Polymarket containing **1.1 billion re
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- ~120GB disk space (for full dataset + DuckDB)
+- ~120GB disk space (for full dataset)
 
 ### 1. Clone and Configure
 
@@ -107,7 +107,7 @@ cp .env.example .env
 # Optional: edit .env to set ALCHEMY_API_KEY for faster RPC
 ```
 
-### 2. Download and Prepare Data
+### 2. Download Data
 
 ```bash
 pip install huggingface_hub
@@ -116,29 +116,22 @@ pip install huggingface_hub
 hf download SII-WANGZJ/Polymarket_data --repo-type dataset --local-dir data
 ```
 
-### 3. Import Data into DuckDB
+### 3. Start the Service
 
 ```bash
-docker compose run --rm import
+docker compose up -d --build
 ```
 
-This reads parquet files from `data/`, `data/dataset/`, and `data/data_clean/` and imports them into `data/polymarket.duckdb`.
-It also supports split files like `orderfilled_part1.parquet`, `orderfilled_part2.parquet`, etc.  
-Takes ~15 minutes for the full 107GB dataset. After import, parquet files can be deleted to save space.
+That's it — **no import step needed**. The service:
 
-### 4. Start the Service
+- Queries parquet files **directly** via DuckDB VIEWs (zero import, zero extra memory)
+- **Fetches** new blocks from Polygon every 2 seconds (written to lightweight `_new` tables)
+- **Serves** the query API on `http://localhost:8000`
+- **Auto-restarts** if the process crashes
 
-```bash
-docker compose up -d
-```
+Parquet files (split files like `orderfilled_part1.parquet` are supported) are auto-detected in `data/`, `data/dataset/`, and `data/data_clean/`.
 
-That's it. The service is now:
-
-- **Fetching** new blocks from Polygon every 2 seconds
-- **Serving** the query API on `http://localhost:8000`
-- **Auto-restarting** if the process crashes
-
-### 5. Use the API
+### 4. Use the API
 
 ```bash
 # Service status
@@ -180,8 +173,8 @@ docker compose restart
 # Rebuild after code changes
 docker compose up -d --build
 
-# Re-import data (skip existing tables)
-docker compose run --rm import --skip-existing
+# Verify data availability and row counts
+docker compose run --rm --profile tools verify
 ```
 
 ### Environment Variables
