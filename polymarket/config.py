@@ -9,8 +9,8 @@ from typing import Optional
 
 # ============== 路径 ==============
 
-# PROJECT_ROOT 指向 poly_onchain 目录本身
-PROJECT_ROOT = Path(__file__).parent
+# PROJECT_ROOT 指向仓库根目录（Polymarket_data/）
+PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / 'data'
 LOG_DIR = PROJECT_ROOT / 'logs'
 
@@ -43,11 +43,14 @@ QUANT_PREVIEW_FILE = LATEST_RESULT_DIR / 'quant.csv'
 STATE_FILE = DATA_DIR / 'state.json'
 TEMP_DIR = DATA_DIR / 'temp'
 
+# DuckDB 数据库
+DUCKDB_FILE = DATA_DIR / 'polymarket.duckdb'
+
 
 # ============== 区块链 ==============
 
 POLYGON_CHAIN_ID = 137
-POLYGON_RPC_URL = 'https://polygon-rpc.com'
+POLYGON_RPC_URL = os.getenv('POLYGON_RPC_URL', 'https://polygon-rpc.com')
 
 
 def get_rpc_url(use_alchemy: bool = False) -> str:

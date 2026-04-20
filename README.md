@@ -1,43 +1,21 @@
-<div align="center">
 
-<h1>Polymarket Data</h1>
 
-<h3>Complete Data Infrastructure for Polymarket — Fetch, Process, Analyze</h3>
+# Polymarket Data
 
-<p style="max-width: 600px; margin: 0 auto;">
+### Complete Data Infrastructure for Polymarket — Fetch, Process, Analyze
+
 A comprehensive toolkit and dataset for Polymarket prediction markets. Fetch trading data directly from Polygon blockchain and Gamma API, process into multiple analysis-ready formats, and analyze with ease.
-</p>
 
-<p>
-<b>Zhengjie Wang</b><sup>1,2</sup>, <b>Leiyu Chao</b><sup>1,3</sup>, <b>Yu Bao</b><sup>1,4</sup>, <b>Lian Cheng</b><sup>1,3</sup>, <b>Jianhan Liao</b><sup>1,5</sup>, <b>Yikang Li</b><sup>1,†</sup>
-</p>
+**Zhengjie Wang**1,2, **Leiyu Chao**1,3, **Yu Bao**1,4, **Lian Cheng**1,3, **Jianhan Liao**1,5, **Yikang Li**1,†
 
-<p>
-<sup>1</sup>Shanghai Innovation Institute &nbsp;&nbsp; <sup>2</sup>Westlake University &nbsp;&nbsp; <sup>3</sup>Shanghai Jiao Tong University
-<br>
-<sup>4</sup>Harbin Institute of Technology &nbsp;&nbsp; <sup>5</sup>Fudan University
-</p>
+1Shanghai Innovation Institute    2Westlake University    3Shanghai Jiao Tong University   
+4Harbin Institute of Technology    5Fudan University
 
-<p>
-<sup>†</sup>Corresponding author
-</p>
+†Corresponding author
 
-</div>
 
-<p align="center">
-  <a href="https://huggingface.co/datasets/SII-WANGZJ/Polymarket_data">
-    <img src="https://img.shields.io/badge/Hugging%20Face-Dataset-yellow.svg" alt="HuggingFace Dataset"/>
-  </a>
-  <a href="https://github.com/SII-WANGZJ/Polymarket_data">
-    <img src="https://img.shields.io/badge/GitHub-Code-black.svg?logo=github" alt="GitHub Repository"/>
-  </a>
-  <a href="https://github.com/SII-WANGZJ/Polymarket_data/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License"/>
-  </a>
-  <a href="https://www.python.org/downloads/">
-    <img src="https://img.shields.io/badge/Python-3.12+-blue.svg" alt="Python 3.12+"/>
-  </a>
-</p>
+
+
 
 ---
 
@@ -58,24 +36,28 @@ We provide **107GB of trading data** from Polymarket containing **1.1 billion re
 
 ## vs Third-party Data Sources
 
-| Field | Polymarket Data | Third-party |
-|-------|-----------------|-------------|
-| block_number | Yes | No |
-| contract name | Yes | No |
-| maker_fee / taker_fee / protocol_fee | Yes | No |
-| order_hash | Yes | No |
-| market_id (auto-linked) | Yes | Yes |
-| Missing token auto-fill | Yes | Yes |
+
+| Field                                | Polymarket Data | Third-party |
+| ------------------------------------ | --------------- | ----------- |
+| block_number                         | Yes             | No          |
+| contract name                        | Yes             | No          |
+| maker_fee / taker_fee / protocol_fee | Yes             | No          |
+| order_hash                           | Yes             | No          |
+| market_id (auto-linked)              | Yes             | Yes         |
+| Missing token auto-fill              | Yes             | Yes         |
+
 
 ## Dataset Overview
 
-| File | Size | Records | Description |
-|------|------|---------|-------------|
-| `orderfilled.parquet` | 31GB | 293.3M | Raw blockchain events from OrderFilled logs |
-| `trades.parquet` | 32GB | 293.3M | Processed trades with market metadata linkage |
-| `markets.parquet` | 68MB | 268,706 | Market information and metadata |
-| `quant.parquet` | 21GB | 170.3M | Clean market data with unified YES perspective |
-| `users.parquet` | 23GB | 340.6M | User behavior data split by maker/taker roles |
+
+| File                  | Size | Records | Description                                    |
+| --------------------- | ---- | ------- | ---------------------------------------------- |
+| `orderfilled.parquet` | 31GB | 293.3M  | Raw blockchain events from OrderFilled logs    |
+| `trades.parquet`      | 32GB | 293.3M  | Processed trades with market metadata linkage  |
+| `markets.parquet`     | 68MB | 268,706 | Market information and metadata                |
+| `quant.parquet`       | 21GB | 170.3M  | Clean market data with unified YES perspective |
+| `users.parquet`       | 23GB | 340.6M  | User behavior data split by maker/taker roles  |
+
 
 **Total**: 107GB, 1.1 billion records
 
@@ -84,186 +66,235 @@ We provide **107GB of trading data** from Polymarket containing **1.1 billion re
 ## Use Cases
 
 ### Market Research & Analysis
+
 - Study prediction market dynamics and price discovery mechanisms
 - Analyze market efficiency and information aggregation
 - Research crowd wisdom and forecasting accuracy
 
 ### Behavioral Studies
+
 - Track individual user trading patterns and decision-making
 - Study market participant behavior under different conditions
 - Analyze risk preferences and trading strategies
 
 ### Data Science & Machine Learning
+
 - Train models for price prediction and market forecasting
 - Feature engineering for time-series analysis
 - Develop algorithms for market analysis
 
 ### Academic Research
+
 - Economics and finance research on prediction markets
 - Social science studies on collective intelligence
 - Computer science research on blockchain data analysis
 
-## Quick Start
+## Quick Start (Docker Compose)
 
-### Installation
+### Prerequisites
+
+- Docker and Docker Compose installed
+- ~120GB disk space (for full dataset + DuckDB)
+
+### 1. Clone and Configure
 
 ```bash
-# Clone repository
 git clone https://github.com/SII-WANGZJ/Polymarket_data.git
 cd Polymarket_data
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Or install as package
-pip install -e .
+# Create environment config
+cp .env.example .env
+# Edit .env to set ALCHEMY_API_KEY (optional, for faster RPC)
 ```
 
-### Download Dataset
+### 2. Download and Prepare Data
 
 ```bash
-# Install HuggingFace CLI
 pip install huggingface_hub
 
-# Download specific file
-hf download SII-WANGZJ/Polymarket_data quant.parquet --repo-type dataset
+# Download all parquet files
+hf download SII-WANGZJ/Polymarket_data --repo-type dataset --local-dir data/dataset
 
-# Download all files
-hf download SII-WANGZJ/Polymarket_data --repo-type dataset
+# Move cleaned data to the right directory
+mkdir -p data/data_clean
+mv data/dataset/quant.parquet data/data_clean/
+mv data/dataset/users.parquet data/data_clean/
 ```
 
-### Usage
-
-#### 1. Continuous Real-time Mode (Recommended)
-
-Automatically fetch new blocks and keep running 24/7:
+### 3. Import Data into DuckDB
 
 ```bash
-# Start continuous fetching
-./scripts/continuous_start.sh
+docker compose run --rm import
+```
 
+This reads parquet files from `data/` and imports them into `data/polymarket.duckdb`. Takes ~15 minutes for the full 107GB dataset. After import, parquet files can be deleted to save space.
+
+### 4. Start the Service
+
+```bash
+docker compose up -d
+```
+
+That's it. The service is now:
+
+- **Fetching** new blocks from Polygon every 2 seconds
+- **Serving** the query API on `http://localhost:8000`
+- **Auto-restarting** if the process crashes
+
+### 5. Use the API
+
+```bash
+# Service status
+curl http://localhost:8000/api/status
+
+# Interactive API docs (Swagger UI)
+open http://localhost:8000/docs
+
+# Query trades by market
+curl "http://localhost:8000/api/trades?market_id=YOUR_MARKET_ID&limit=10"
+
+# Search markets
+curl "http://localhost:8000/api/markets?search=Trump"
+
+# Price history
+curl "http://localhost:8000/api/market/YOUR_MARKET_ID/price"
+
+# User trades
+curl "http://localhost:8000/api/user/0xADDRESS/trades"
+
+# Custom SQL query
+curl -X POST http://localhost:8000/api/query \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "SELECT market_id, COUNT(*) as cnt, SUM(usd_amount) as volume FROM trades GROUP BY market_id ORDER BY volume DESC LIMIT 10"}'
+```
+
+### Common Operations
+
+```bash
 # View logs
-tail -f logs/continuous_fetch.log
+docker compose logs -f
 
-# Stop gracefully
-./scripts/continuous_stop.sh
+# Stop the service
+docker compose down
+
+# Restart
+docker compose restart
+
+# Rebuild after code changes
+docker compose up -d --build
+
+# Re-import data (skip existing tables)
+docker compose run --rm import --skip-existing
 ```
 
-Features:
-- **Batch mode**: When behind by ≥100 blocks, fetch 100 blocks at once
-- **Real-time mode**: When caught up, fetch 1 block every 2 seconds
-- **Auto data cleaning**: Generate 4 parquet files in real-time
-- **Graceful shutdown**: Ensures all files are properly closed on exit
+### Environment Variables
 
-#### 2. Batch Historical Data
+Configure via `.env` file:
 
-Fetch specific range of historical blocks:
 
-```bash
-# Fetch last 10,000 blocks
-python -m polymarket.cli fetch-onchain --blocks 10000
+| Variable          | Default                   | Description                            |
+| ----------------- | ------------------------- | -------------------------------------- |
+| `ALCHEMY_API_KEY` | (empty)                   | Alchemy API key for faster Polygon RPC |
+| `POLYGON_RPC_URL` | `https://polygon-rpc.com` | Custom RPC endpoint                    |
+| `API_PORT`        | `8000`                    | Host port for the API server           |
+| `BATCH_SIZE`      | `100`                     | Blocks per batch in catch-up mode      |
+| `LOG_LEVEL`       | `INFO`                    | Log level: DEBUG, INFO, WARNING, ERROR |
 
-# Resume from last checkpoint
-python -m polymarket.cli fetch-onchain --continue
 
-# Fetch specific block range
-python -m polymarket.cli fetch-onchain --start 80000000 --end 80010000
+## API Endpoints
+
+
+| Method | Endpoint                     | Description                                                   |
+| ------ | ---------------------------- | ------------------------------------------------------------- |
+| GET    | `/api/status`                | Service status, latest block, table row counts                |
+| GET    | `/api/trades`                | Query trades (filter by market_id, maker, taker, block range) |
+| GET    | `/api/markets`               | Search markets by question text                               |
+| GET    | `/api/market/{id}/price`     | Price history for a specific market                           |
+| GET    | `/api/user/{address}/trades` | Trading history for a wallet address                          |
+| POST   | `/api/query`                 | Custom SQL query (SELECT only, powered by DuckDB)             |
+| GET    | `/docs`                      | Interactive Swagger UI documentation                          |
+
+
+## Architecture
+
+```
+docker compose up -d
+└── polymarket-data container
+    ├── Fetcher Thread ── Polygon RPC ──→ INSERT INTO DuckDB
+    ├── FastAPI Server ── DuckDB SELECT ──→ JSON API
+    └── data/polymarket.duckdb (persistent volume)
 ```
 
-#### 3. Full Pipeline
-
-Complete workflow: fetch markets → fetch on-chain → process data:
-
-```bash
-# Run full pipeline
-./scripts/update_all.sh
-
-# Or step by step
-./scripts/fetch_markets.sh        # Fetch market metadata
-./scripts/fetch_onchain.sh 5000   # Fetch on-chain data
-./scripts/clean_data.sh           # Clean and process data
-```
-
-#### 4. Python API
-
-Use as a library in your Python code:
-
-```python
-from polymarket import LogFetcher, EventDecoder, extract_trades
-from polymarket import load_token_mapping
-
-# 1. Fetch on-chain logs
-fetcher = LogFetcher()
-logs = fetcher.fetch_range_in_batches(start_block, end_block)
-
-# 2. Decode events
-decoder = EventDecoder()
-decoded = decoder.decode_batch(logs)
-events = decoder.format_batch(decoded)
-
-# 3. Load token mapping and extract trades
-token_mapping = load_token_mapping()
-trades_df = extract_trades(events, token_mapping)
-
-# 4. Save to parquet
-trades_df.to_parquet('trades.parquet')
-```
+- **Single container**: fetcher thread + API server in one process
+- **DuckDB**: embedded analytical database, no external DB needed
+- **Volume mount**: `./data` persists across container restarts
+- **Auto-restart**: `restart: unless-stopped` policy
+- **Health check**: Docker monitors `/api/status` every 30 seconds
 
 ## Project Structure
 
 ```
 Polymarket_data/
 ├── polymarket/              # Core Python package
+│   ├── api/                 # FastAPI query service
 │   ├── cli/                 # Command-line interface
+│   ├── db/                  # DuckDB storage layer
 │   ├── fetchers/            # Data fetchers (RPC, Gamma API)
 │   ├── processors/          # Data processors (decoder, cleaner)
-│   └── tools/               # Utility tools (merge, sort, etc.)
-├── scripts/                 # Shell scripts for common tasks
-├── polymarket_data/         # Dataset documentation
+│   ├── tools/               # Utility tools (continuous fetcher)
+│   └── service.py           # Unified entry point
 ├── data/                    # Data storage (gitignored)
-├── logs/                    # Logs (gitignored)
-├── README.md
-├── LICENSE
-└── requirements.txt
+│   └── polymarket.duckdb    # DuckDB database
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+├── requirements.txt
+└── README.md
 ```
 
 ## Data Schema
 
 ### OrderFilled Events (Raw)
 
-| Field | Description |
-|-------|-------------|
-| timestamp | Unix timestamp |
-| block_number | Block number |
-| transaction_hash | Transaction hash |
-| contract | Contract name (CTF_EXCHANGE or NEGRISK_CTF_EXCHANGE) |
-| maker / taker | Trading parties' addresses |
-| maker_asset_id / taker_asset_id | Asset IDs |
-| maker_amount_filled / taker_amount_filled | Filled amounts |
-| maker_fee / taker_fee / protocol_fee | Fees (in wei) |
-| order_hash | Order hash |
+
+| Field                                     | Description                                          |
+| ----------------------------------------- | ---------------------------------------------------- |
+| timestamp                                 | Unix timestamp                                       |
+| block_number                              | Block number                                         |
+| transaction_hash                          | Transaction hash                                     |
+| contract                                  | Contract name (CTF_EXCHANGE or NEGRISK_CTF_EXCHANGE) |
+| maker / taker                             | Trading parties' addresses                           |
+| maker_asset_id / taker_asset_id           | Asset IDs                                            |
+| maker_amount_filled / taker_amount_filled | Filled amounts                                       |
+| maker_fee / taker_fee / protocol_fee      | Fees (in wei)                                        |
+| order_hash                                | Order hash                                           |
+
 
 ### Trades (Processed)
 
-| Field | Description |
-|-------|-------------|
-| market_id | Market ID (auto-linked from token) |
-| answer | Option name (YES/NO/etc.) |
-| price | Trade price (0-1) |
-| usd_amount / token_amount | USDC and token amounts |
-| maker_direction / taker_direction | Buy/sell direction |
+
+| Field                             | Description                        |
+| --------------------------------- | ---------------------------------- |
+| market_id                         | Market ID (auto-linked from token) |
+| answer                            | Option name (YES/NO/etc.)          |
+| price                             | Trade price (0-1)                  |
+| usd_amount / token_amount         | USDC and token amounts             |
+| maker_direction / taker_direction | Buy/sell direction                 |
+
 
 ### quant.parquet - Clean Market Data
 
 Filtered and normalized trade data with unified token perspective (YES token).
 
 **Key Features:**
+
 - Unified perspective: All trades normalized to YES token (token1)
 - Clean data: Contract trades filtered out, only real user trades
 - Complete information: Maker/taker roles preserved
 - Best for: Market analysis, price studies, time-series forecasting
 
 **Schema:**
+
 ```python
 {
     'transaction_hash': str,      # Blockchain transaction hash
@@ -283,12 +314,14 @@ Filtered and normalized trade data with unified token perspective (YES token).
 Split maker/taker records with unified buy direction for user analysis.
 
 **Key Features:**
+
 - Split records: Each trade becomes 2 records (one maker, one taker)
 - Unified direction: All converted to BUY (negative amounts = selling)
 - User sorted: Ordered by user for trajectory analysis
 - Best for: User profiling, PnL calculation, wallet analysis
 
 **Schema:**
+
 ```python
 {
     'transaction_hash': str,      # Transaction hash
@@ -330,16 +363,15 @@ Polygon Blockchain (RPC)    Gamma API
 **Key Transformations:**
 
 1. **quant.parquet**:
-   - Filter out contract trades (keep only user trades)
-   - Normalize all trades to YES token perspective
-   - Preserve maker/taker information
-   - Result: 170.3M records (from 293.3M)
-
+  - Filter out contract trades (keep only user trades)
+  - Normalize all trades to YES token perspective
+  - Preserve maker/taker information
+  - Result: 170.3M records (from 293.3M)
 2. **users.parquet**:
-   - Split each trade into 2 records (maker + taker)
-   - Convert all to BUY direction (signed amounts)
-   - Sort by user for easy querying
-   - Result: 340.6M records (from 293.3M × 2, some filtered)
+  - Split each trade into 2 records (maker + taker)
+  - Convert all to BUY direction (signed amounts)
+  - Sort by user for easy querying
+  - Result: 340.6M records (from 293.3M × 2, some filtered)
 
 ## Example Analysis
 
@@ -433,58 +465,26 @@ print(top_markets)
 - **Open Source**: Fully reproducible collection process
 
 **Contracts Tracked:**
+
 - Exchange Contract 1: `0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E`
 - Exchange Contract 2: `0xC5d563A36AE78145C45a50134d48A1215220f80a`
 
-## CLI Commands
+## Local Development (without Docker)
 
 ```bash
-# Fetch market metadata
-python -m polymarket.cli fetch-markets
+# Install dependencies
+pip install -r requirements.txt
+pip install -e .
 
-# Fetch on-chain data
-python -m polymarket.cli fetch-onchain --blocks 1000
-python -m polymarket.cli fetch-onchain --continue
+# Import data
+python -m polymarket.db.import_parquet
 
-# Process data
-python -m polymarket.cli process
-python -m polymarket.cli clean
+# Start service (fetcher + API)
+python -m polymarket.service --port 8000
 
-# Full update
-python -m polymarket.cli update
-```
-
-## Utility Tools
-
-```bash
-# Merge multiple parquet files
-python -m polymarket.tools.merge_parquet file1.parquet file2.parquet -o merged.parquet
-
-# Sort parquet by timestamp
-python -m polymarket.tools.sort_parquet input.parquet -o sorted.parquet
-
-# Refetch failed blocks
-python -m polymarket.tools.refetch_failed_blocks --start 80000000 --end 80100000
-```
-
-## Configuration
-
-### Environment Variables
-
-```bash
-# Optional: Alchemy API key for faster RPC access
-export ALCHEMY_API_KEY=your_key_here
-```
-
-### Custom RPC Endpoint
-
-Edit `polymarket/config.py`:
-
-```python
-RPC_ENDPOINTS = [
-    "https://polygon-rpc.com",
-    "your_custom_endpoint",
-]
+# Or API only / fetcher only
+python -m polymarket.service --no-fetcher
+python -m polymarket.service --fetcher-only
 ```
 
 ## Contributing
@@ -534,10 +534,9 @@ This tool is for research and educational purposes. Users are responsible for co
 
 ---
 
-<div align="center">
+
 
 **Built for the research and data science community**
 
 [HuggingFace](https://huggingface.co/datasets/SII-WANGZJ/Polymarket_data) • [GitHub](https://github.com/SII-WANGZJ/Polymarket_data) • [Documentation](polymarket_data/DATA_DESCRIPTION.md)
 
-</div>

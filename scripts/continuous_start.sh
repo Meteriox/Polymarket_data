@@ -1,22 +1,33 @@
 #!/bin/bash
-# Start continuous blockchain data fetching
+# Start Polymarket Data Service via Docker Compose
 
 set -e
 
-echo "Starting continuous data fetching..."
+echo "=============================================="
+echo "  Polymarket Data Service"
+echo "=============================================="
 
-# Create directories
-mkdir -p logs data
+# Check .env
+if [ ! -f .env ]; then
+    echo "Creating .env from .env.example ..."
+    cp .env.example .env
+fi
 
-# Start the process in background
-nohup python -m polymarket.tools.continuous_fetch > logs/continuous_fetch.log 2>&1 &
+# Create data directories (for volume mount)
+mkdir -p data/dataset data/data_clean logs
 
-PID=$!
-echo $PID > logs/continuous_fetch.pid
-
-echo "✓ Continuous fetching started"
-echo "  Process ID: $PID"
-echo "  Log file: logs/continuous_fetch.log"
+# Build and start
 echo ""
-echo "To view logs: tail -f logs/continuous_fetch.log"
-echo "To stop: ./scripts/continuous_stop.sh"
+echo "Starting service ..."
+docker compose up -d --build
+
+echo ""
+echo "Service started:"
+echo "  API:    http://localhost:${API_PORT:-8000}"
+echo "  Docs:   http://localhost:${API_PORT:-8000}/docs"
+echo "  Status: http://localhost:${API_PORT:-8000}/api/status"
+echo ""
+echo "Commands:"
+echo "  View logs:   docker compose logs -f"
+echo "  Stop:        ./scripts/continuous_stop.sh"
+echo "  Import data: ./scripts/import_data.sh"

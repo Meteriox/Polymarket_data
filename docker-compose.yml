@@ -1,0 +1,26 @@
+services:
+  polymarket:
+    build: .
+    container_name: polymarket-data
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    command: ["--host", "0.0.0.0", "--port", "8000", "--batch-size", "${BATCH_SIZE:-100}"]
+    stop_grace_period: 30s
+
+  import:
+    build: .
+    container_name: polymarket-import
+    profiles:
+      - import
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    entrypoint: ["python", "-m", "polymarket.db.import_parquet"]
+    command: ["--skip-existing"]
