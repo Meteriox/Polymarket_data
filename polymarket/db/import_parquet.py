@@ -12,6 +12,7 @@ import argparse
 import logging
 import time
 from pathlib import Path
+from typing import Iterable
 
 import duckdb
 
@@ -27,19 +28,46 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 IMPORT_MAP = [
-    ('orderfilled', 'orderfilled.parquet', 'dataset'),
-    ('trades', 'trades.parquet', 'dataset'),
-    ('markets', 'markets.parquet', 'dataset'),
-    ('quant', 'quant.parquet', 'data_clean'),
-    ('users', 'users.parquet', 'data_clean'),
+    ('orderfilled', ['orderfilled.parquet', 'orderfilled_part*.parquet']),
+    ('trades', ['trades.parquet']),
+    ('markets', ['markets.parquet']),
+    ('quant', ['quant.parquet']),
+    ('users', ['users.parquet']),
 ]
 
 
-def import_table(conn: duckdb.DuckDBPyConnection, table: str,
-                 parquet_path: Path, skip_existing: bool = False):
-    """Import a single parquet file into a DuckDB table."""
-    if not parquet_path.exists():
-        logger.warning(f"  Skipped {table}: {parquet_path} not found")
+def _resolve_parquet_sources(
+    table: str,
+    filename_patterns: list[str],
+    search_dirs: Iterable[Path],
+) -> list[Path]:
+    """Resolve parquet files for a table from multiple directories/patterns."""
+    resolved: list[Path] = []
+    seen: set[Path] = set()
+    for directory in search_dirs:
+        if not directory.exists():
+            continue
+        for pattern in filename_patterns:
+            for path in sorted(directory.glob(pattern)):
+                if path.is_file() and path not in seen:
+                    resolved.append(path)
+                    seen.add(path)
+    if not resolved:
+        logger.warning(
+            f"  Skipped {table}: no files matched {filename_patterns} "
+            f"in {[str(p) for p in search_dirs]}"
+        )
+    return resolved
+
+
+def import_table(
+    conn: duckdb.DuckDBPyConnection,
+    table: str,
+    parquet_paths: list[Path],
+    skip_existing: bool = False,
+):
+    """Import one or multiple parquet files into a DuckDB table."""
+    if not parquet_paths:
         return
 
     row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
@@ -51,17 +79,24 @@ def import_table(conn: duckdb.DuckDBPyConnection, table: str,
         logger.info(f"  Clearing {table} ({row_count:,} existing rows)...")
         conn.execute(f"DELETE FROM {table}")
 
-    logger.info(f"  Importing {table} from {parquet_path.name} ...")
+    file_count = len(parquet_paths)
+    file_list = ", ".join(p.name for p in parquet_paths[:3])
+    if file_count > 3:
+        file_list = f"{file_list}, ..."
+    logger.info(f"  Importing {table} from {file_count} file(s): {file_list}")
     t0 = time.time()
 
-    conn.execute(f"""
+    path_list_sql = ", ".join(f"'{str(path)}'" for path in parquet_paths)
+    conn.execute(
+        f"""
         INSERT INTO {table}
-        SELECT * FROM read_parquet('{parquet_path}')
-    """)
+        SELECT * FROM read_parquet([{path_list_sql}])
+        """
+    )
 
     new_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
     elapsed = time.time() - t0
-    size_mb = parquet_path.stat().st_size / 1024 / 1024
+    size_mb = sum(path.stat().st_size for path in parquet_paths) / 1024 / 1024
     logger.info(f"  Done: {new_count:,} rows, {size_mb:.0f} MB, {elapsed:.1f}s")
 
 
@@ -83,14 +118,14 @@ def main():
 
     init_schema(conn)
 
-    for table, filename, subdir in IMPORT_MAP:
-        if args.data_dir:
-            parquet_path = Path(args.data_dir) / filename
-        else:
-            base = DATASET_DIR if subdir == 'dataset' else DATA_CLEAN_DIR
-            parquet_path = base / filename
+    if args.data_dir:
+        search_dirs = [Path(args.data_dir)]
+    else:
+        search_dirs = [DATA_DIR, DATASET_DIR, DATA_CLEAN_DIR]
 
-        import_table(conn, table, parquet_path, args.skip_existing)
+    for table, patterns in IMPORT_MAP:
+        parquet_paths = _resolve_parquet_sources(table, patterns, search_dirs)
+        import_table(conn, table, parquet_paths, args.skip_existing)
 
     conn.close()
 

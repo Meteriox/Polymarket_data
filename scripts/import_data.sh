@@ -16,28 +16,41 @@ echo ""
 [ -f .env ] || cp .env.example .env
 
 # Create data directories
-mkdir -p data/dataset data/data_clean
+mkdir -p data data/dataset data/data_clean
 
-# Check for parquet files
-PARQUET_COUNT=0
-for dir in data/dataset data/data_clean; do
-    if [ -d "$dir" ]; then
-        COUNT=$(find "$dir" -name "*.parquet" -maxdepth 1 2>/dev/null | wc -l | tr -d ' ')
-        PARQUET_COUNT=$((PARQUET_COUNT + COUNT))
-    fi
-done
+# Check for parquet files in common locations:
+# - data/
+# - data/dataset/
+# - data/data_clean/
+PARQUET_COUNT=$(python3 - <<'PY'
+from pathlib import Path
+
+dirs = [Path("data"), Path("data/dataset"), Path("data/data_clean")]
+count = 0
+seen = set()
+for d in dirs:
+    if not d.exists():
+        continue
+    for p in d.glob("*.parquet"):
+        if p.is_file():
+            rp = p.resolve()
+            if rp not in seen:
+                seen.add(rp)
+                count += 1
+print(count)
+PY
+)
 
 if [ "$PARQUET_COUNT" -eq 0 ]; then
-    echo "No parquet files found in data/dataset/ or data/data_clean/"
+    echo "No parquet files found in data/, data/dataset/, or data/data_clean/"
     echo ""
     echo "Download data first:"
     echo "  pip install huggingface_hub"
     echo "  hf download SII-WANGZJ/Polymarket_data --repo-type dataset --local-dir data/dataset"
     echo ""
-    echo "Then move quant.parquet and users.parquet to data/data_clean/"
-    echo "  mkdir -p data/data_clean"
-    echo "  mv data/dataset/quant.parquet data/data_clean/"
-    echo "  mv data/dataset/users.parquet data/data_clean/"
+    echo "Supported layouts:"
+    echo "  1) Put all parquet files directly under data/"
+    echo "  2) Split files between data/dataset and data/data_clean"
     echo ""
     echo "Then run this script again."
     exit 1

@@ -102,9 +102,9 @@ We provide **107GB of trading data** from Polymarket containing **1.1 billion re
 git clone https://github.com/SII-WANGZJ/Polymarket_data.git
 cd Polymarket_data
 
-# Create environment config
+# Optional: create environment config
 cp .env.example .env
-# Edit .env to set ALCHEMY_API_KEY (optional, for faster RPC)
+# Optional: edit .env to set ALCHEMY_API_KEY for faster RPC
 ```
 
 ### 2. Download and Prepare Data
@@ -112,13 +112,8 @@ cp .env.example .env
 ```bash
 pip install huggingface_hub
 
-# Download all parquet files
-hf download SII-WANGZJ/Polymarket_data --repo-type dataset --local-dir data/dataset
-
-# Move cleaned data to the right directory
-mkdir -p data/data_clean
-mv data/dataset/quant.parquet data/data_clean/
-mv data/dataset/users.parquet data/data_clean/
+# Download all parquet files (saved under data/)
+hf download SII-WANGZJ/Polymarket_data --repo-type dataset --local-dir data
 ```
 
 ### 3. Import Data into DuckDB
@@ -127,7 +122,9 @@ mv data/dataset/users.parquet data/data_clean/
 docker compose run --rm import
 ```
 
-This reads parquet files from `data/` and imports them into `data/polymarket.duckdb`. Takes ~15 minutes for the full 107GB dataset. After import, parquet files can be deleted to save space.
+This reads parquet files from `data/`, `data/dataset/`, and `data/data_clean/` and imports them into `data/polymarket.duckdb`.
+It also supports split files like `orderfilled_part1.parquet`, `orderfilled_part2.parquet`, etc.  
+Takes ~15 minutes for the full 107GB dataset. After import, parquet files can be deleted to save space.
 
 ### 4. Start the Service
 
