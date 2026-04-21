@@ -24,11 +24,11 @@ CREATE TABLE IF NOT EXISTS orderfilled (
     taker VARCHAR,
     maker_asset_id VARCHAR,
     taker_asset_id VARCHAR,
-    maker_amount_filled BIGINT,
-    taker_amount_filled BIGINT,
-    maker_fee BIGINT,
-    taker_fee BIGINT,
-    protocol_fee BIGINT
+    maker_amount_filled HUGEINT,
+    taker_amount_filled HUGEINT,
+    maker_fee HUGEINT,
+    taker_fee HUGEINT,
+    protocol_fee HUGEINT
 );
 """
 
@@ -159,9 +159,9 @@ TABLE_COLUMN_TYPES = {
         'datetime': 'VARCHAR', 'order_hash': 'VARCHAR',
         'maker': 'VARCHAR', 'taker': 'VARCHAR',
         'maker_asset_id': 'VARCHAR', 'taker_asset_id': 'VARCHAR',
-        'maker_amount_filled': 'BIGINT', 'taker_amount_filled': 'BIGINT',
-        'maker_fee': 'BIGINT', 'taker_fee': 'BIGINT',
-        'protocol_fee': 'BIGINT',
+        'maker_amount_filled': 'HUGEINT', 'taker_amount_filled': 'HUGEINT',
+        'maker_fee': 'HUGEINT', 'taker_fee': 'HUGEINT',
+        'protocol_fee': 'HUGEINT',
     },
     'trades': {
         'timestamp': 'BIGINT', 'datetime': 'VARCHAR',

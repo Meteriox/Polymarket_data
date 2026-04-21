@@ -125,39 +125,28 @@ def _is_binary_type(arrow_type) -> bool:
 
 
 def _convert_binary_column(col: pa.Array, target_duckdb_type: str) -> pa.Array:
-    """Convert a binary Arrow column to the appropriate type based on the DuckDB target.
+    """Convert a binary Arrow column to a utf8 string column.
 
-    Binary columns from HuggingFace parquet files may contain:
-    - ABI-encoded uint256 values (32 bytes, big-endian) for numeric fields
-    - Raw bytes for hash/address fields that should be hex strings
+    Binary columns from HuggingFace parquet files contain ABI-encoded uint256
+    values (32 bytes, big-endian). We decode them to decimal or hex strings
+    and let DuckDB handle the implicit cast to the target type on INSERT.
+
+    This avoids OverflowError when uint256 values exceed int64/int128 range.
     """
     target_upper = target_duckdb_type.upper()
+    is_numeric = target_upper in ('BIGINT', 'INTEGER', 'HUGEINT', 'DOUBLE')
 
-    if target_upper in ('BIGINT', 'INTEGER', 'DOUBLE'):
-        converted = []
-        for val in col:
-            if val is None or not val.is_valid:
-                converted.append(None)
-            else:
-                raw = val.as_py()
-                n = int.from_bytes(raw, byteorder='big', signed=False)
-                if target_upper == 'DOUBLE':
-                    converted.append(float(n))
-                else:
-                    converted.append(n)
-            
-        if target_upper == 'DOUBLE':
-            return pa.array(converted, type=pa.float64())
-        return pa.array(converted, type=pa.int64())
-
-    # VARCHAR / BOOLEAN / anything else: decode as hex string
     converted = []
     for val in col:
         if val is None or not val.is_valid:
             converted.append(None)
         else:
             raw = val.as_py()
-            converted.append('0x' + raw.hex())
+            n = int.from_bytes(raw, byteorder='big', signed=False)
+            if is_numeric:
+                converted.append(str(n))
+            else:
+                converted.append('0x' + raw.hex())
 
     return pa.array(converted, type=pa.utf8())
 
