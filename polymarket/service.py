@@ -5,6 +5,9 @@ Polymarket Data Service — unified entry point.
 Runs the continuous blockchain fetcher in a background thread and serves
 the FastAPI query API in the main thread (via uvicorn).
 
+Prerequisites:
+    Data must be imported first:  python -m polymarket.db.import_parquet
+
 Usage:
     python -m polymarket.service
     python -m polymarket.service --port 8000 --host 0.0.0.0
@@ -21,7 +24,7 @@ import time
 
 import uvicorn
 
-from polymarket.db.engine import get_connection, close_connection, register_parquet_views
+from polymarket.db.engine import get_connection, close_connection
 from polymarket.db.schema import init_schema
 from polymarket.api.app import create_app
 from polymarket.tools.continuous_fetch import ContinuousFetcher
@@ -76,8 +79,11 @@ def main():
     conn = get_connection()
     init_schema(conn)
 
-    logger.info("Registering parquet views...")
-    register_parquet_views(conn)
+    row = conn.execute("SELECT COUNT(*) FROM orderfilled").fetchone()
+    row_count = row[0] if row else 0
+    if row_count == 0:
+        logger.warning("No data in database! Run import first:")
+        logger.warning("  python -m polymarket.db.import_parquet")
 
     signal.signal(signal.SIGTERM, _shutdown_handler)
     signal.signal(signal.SIGINT, _shutdown_handler)

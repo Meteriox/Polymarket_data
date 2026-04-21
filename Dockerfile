@@ -17,8 +17,8 @@ RUN mkdir -p /app/data/dataset /app/data/data_clean /app/logs
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD curl -f http://localhost:8000/api/status || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=30s \
+    CMD curl -f http://localhost:8000/ || exit 1
 
 ENTRYPOINT ["python", "-m", "polymarket.service"]
 CMD ["--host", "0.0.0.0", "--port", "8000"]

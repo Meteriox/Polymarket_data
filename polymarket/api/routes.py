@@ -4,15 +4,12 @@ API routes for querying Polymarket data.
 
 import re
 import logging
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from polymarket.db.engine import get_readonly_connection
-from polymarket.api.models import (
-    QueryRequest, QueryResponse, StatusResponse,
-    TradeQuery, ErrorResponse
-)
+from polymarket.db.engine import execute_query_async
+from polymarket.api.models import QueryRequest, QueryResponse, StatusResponse
 from polymarket.state import service_state
 
 logger = logging.getLogger(__name__)
@@ -26,25 +23,21 @@ DANGEROUS_KEYWORDS = re.compile(
 )
 
 
-def _execute_query(sql: str, limit: int = 1000) -> QueryResponse:
+async def _execute_query(sql: str, limit: int = 1000) -> QueryResponse:
     """Execute a read-only SQL query and return results."""
-    conn = get_readonly_connection()
-    try:
-        result = conn.execute(sql).fetchdf()
-        truncated = len(result) > limit
-        if truncated:
-            result = result.head(limit)
+    result = await execute_query_async(sql)
+    truncated = len(result) > limit
+    if truncated:
+        result = result.head(limit)
 
-        result = result.where(result.notna(), None)
+    result = result.where(result.notna(), None)
 
-        return QueryResponse(
-            columns=list(result.columns),
-            data=result.to_dict(orient='records'),
-            row_count=len(result),
-            truncated=truncated
-        )
-    finally:
-        conn.close()
+    return QueryResponse(
+        columns=list(result.columns),
+        data=result.to_dict(orient='records'),
+        row_count=len(result),
+        truncated=truncated
+    )
 
 
 # ─── Status ─────────────────────────────────────────────────
@@ -52,35 +45,32 @@ def _execute_query(sql: str, limit: int = 1000) -> QueryResponse:
 @router.get("/status", response_model=StatusResponse)
 async def get_status():
     """Service status: latest block, table row counts, fetcher status."""
-    conn = get_readonly_connection()
-    try:
-        tables = ['orderfilled', 'trades', 'markets', 'quant', 'users']
-        counts = {}
-        for t in tables:
-            try:
-                row = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()
-                counts[t] = row[0] if row else 0
-            except Exception:
-                counts[t] = 0
-
-        latest_block = None
+    tables = ['orderfilled', 'trades', 'markets', 'quant', 'users']
+    counts = {}
+    for t in tables:
         try:
-            row = conn.execute("SELECT MAX(block_number) FROM orderfilled").fetchone()
-            if row and row[0] is not None:
-                latest_block = int(row[0])
+            df = await execute_query_async(f"SELECT COUNT(*) as cnt FROM {t}")
+            counts[t] = int(df['cnt'].iloc[0])
         except Exception:
-            pass
+            counts[t] = 0
 
-        fetcher_running = service_state.fetcher_running
-
-        return StatusResponse(
-            status="running",
-            latest_block=latest_block,
-            table_counts=counts,
-            fetcher_running=fetcher_running
+    latest_block = None
+    try:
+        df = await execute_query_async(
+            "SELECT MAX(block_number) as max_block FROM orderfilled"
         )
-    finally:
-        conn.close()
+        val = df['max_block'].iloc[0]
+        if val is not None:
+            latest_block = int(val)
+    except Exception:
+        pass
+
+    return StatusResponse(
+        status="running",
+        latest_block=latest_block,
+        table_counts=counts,
+        fetcher_running=service_state.fetcher_running
+    )
 
 
 # ─── Trades ─────────────────────────────────────────────────
@@ -123,18 +113,14 @@ async def get_trades(
         LIMIT {limit} OFFSET {offset}
     """
 
-    conn = get_readonly_connection()
-    try:
-        result = conn.execute(sql, params).fetchdf()
-        result = result.where(result.notna(), None)
-        return {
-            "data": result.to_dict(orient='records'),
-            "count": len(result),
-            "limit": limit,
-            "offset": offset
-        }
-    finally:
-        conn.close()
+    result = await execute_query_async(sql, params if params else None)
+    result = result.where(result.notna(), None)
+    return {
+        "data": result.to_dict(orient='records'),
+        "count": len(result),
+        "limit": limit,
+        "offset": offset
+    }
 
 
 # ─── Markets ────────────────────────────────────────────────
@@ -165,16 +151,12 @@ async def get_markets(
         LIMIT {limit} OFFSET {offset}
     """
 
-    conn = get_readonly_connection()
-    try:
-        result = conn.execute(sql, params).fetchdf()
-        result = result.where(result.notna(), None)
-        return {
-            "data": result.to_dict(orient='records'),
-            "count": len(result)
-        }
-    finally:
-        conn.close()
+    result = await execute_query_async(sql, params if params else None)
+    result = result.where(result.notna(), None)
+    return {
+        "data": result.to_dict(orient='records'),
+        "count": len(result)
+    }
 
 
 # ─── Market Price ───────────────────────────────────────────
@@ -192,19 +174,15 @@ async def get_market_price(
         ORDER BY block_number ASC
         LIMIT $2
     """
-    conn = get_readonly_connection()
-    try:
-        result = conn.execute(sql, [market_id, limit]).fetchdf()
-        if len(result) == 0:
-            raise HTTPException(404, f"No data found for market {market_id}")
-        result = result.where(result.notna(), None)
-        return {
-            "market_id": market_id,
-            "data": result.to_dict(orient='records'),
-            "count": len(result)
-        }
-    finally:
-        conn.close()
+    result = await execute_query_async(sql, [market_id, limit])
+    if len(result) == 0:
+        raise HTTPException(404, f"No data found for market {market_id}")
+    result = result.where(result.notna(), None)
+    return {
+        "market_id": market_id,
+        "data": result.to_dict(orient='records'),
+        "count": len(result)
+    }
 
 
 # ─── User Trades ────────────────────────────────────────────
@@ -232,17 +210,13 @@ async def get_user_trades(
         LIMIT {limit} OFFSET {offset}
     """
 
-    conn = get_readonly_connection()
-    try:
-        result = conn.execute(sql, params).fetchdf()
-        result = result.where(result.notna(), None)
-        return {
-            "address": address,
-            "data": result.to_dict(orient='records'),
-            "count": len(result)
-        }
-    finally:
-        conn.close()
+    result = await execute_query_async(sql, params)
+    result = result.where(result.notna(), None)
+    return {
+        "address": address,
+        "data": result.to_dict(orient='records'),
+        "count": len(result)
+    }
 
 
 # ─── Custom SQL Query ───────────────────────────────────────
@@ -266,7 +240,7 @@ async def custom_query(request: QueryRequest):
         sql = f"{sql} LIMIT {request.limit}"
 
     try:
-        return _execute_query(sql, request.limit)
+        return await _execute_query(sql, request.limit)
     except Exception as e:
         logger.error(f"Query error: {e}")
         raise HTTPException(400, f"Query execution failed: {str(e)}")

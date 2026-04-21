@@ -1,19 +1,17 @@
 """
 DuckDB table schemas for Polymarket data.
 
-Architecture:
-  - Historical data lives in parquet files, queried directly via DuckDB views.
-  - New data from the continuous fetcher is written to "_new" tables.
-  - Unified views (e.g. "orderfilled") combine both sources with UNION ALL,
-    so API queries always see the full dataset without importing parquet into DB.
+All data (historical + incremental) lives in the same tables.
+The import script loads parquet files into these tables once;
+the continuous fetcher appends new data directly.
 """
 
 import duckdb
 
-# ── Incremental tables: only hold new data from the fetcher ──────────────
+# ── Table DDL ────────────────────────────────────────────────
 
-ORDERFILLED_NEW_DDL = """
-CREATE TABLE IF NOT EXISTS orderfilled_new (
+ORDERFILLED_DDL = """
+CREATE TABLE IF NOT EXISTS orderfilled (
     transaction_hash VARCHAR,
     block_number BIGINT,
     log_index INTEGER,
@@ -34,8 +32,8 @@ CREATE TABLE IF NOT EXISTS orderfilled_new (
 );
 """
 
-TRADES_NEW_DDL = """
-CREATE TABLE IF NOT EXISTS trades_new (
+TRADES_DDL = """
+CREATE TABLE IF NOT EXISTS trades (
     timestamp BIGINT,
     datetime VARCHAR,
     block_number BIGINT,
@@ -62,8 +60,8 @@ CREATE TABLE IF NOT EXISTS trades_new (
 );
 """
 
-MARKETS_NEW_DDL = """
-CREATE TABLE IF NOT EXISTS markets_new (
+MARKETS_DDL = """
+CREATE TABLE IF NOT EXISTS markets (
     id VARCHAR,
     question VARCHAR,
     answer1 VARCHAR,
@@ -86,8 +84,8 @@ CREATE TABLE IF NOT EXISTS markets_new (
 );
 """
 
-QUANT_NEW_DDL = """
-CREATE TABLE IF NOT EXISTS quant_new (
+QUANT_DDL = """
+CREATE TABLE IF NOT EXISTS quant (
     timestamp BIGINT,
     datetime VARCHAR,
     block_number BIGINT,
@@ -114,8 +112,8 @@ CREATE TABLE IF NOT EXISTS quant_new (
 );
 """
 
-USERS_NEW_DDL = """
-CREATE TABLE IF NOT EXISTS users_new (
+USERS_DDL = """
+CREATE TABLE IF NOT EXISTS users (
     timestamp BIGINT,
     datetime VARCHAR,
     block_number BIGINT,
@@ -131,24 +129,26 @@ CREATE TABLE IF NOT EXISTS users_new (
 );
 """
 
-NEW_TABLE_DDLS = [
-    ORDERFILLED_NEW_DDL,
-    TRADES_NEW_DDL,
-    MARKETS_NEW_DDL,
-    QUANT_NEW_DDL,
-    USERS_NEW_DDL,
+TABLE_DDLS = [
+    ORDERFILLED_DDL,
+    TRADES_DDL,
+    MARKETS_DDL,
+    QUANT_DDL,
+    USERS_DDL,
 ]
 
 INDEX_DDL = [
-    "CREATE INDEX IF NOT EXISTS idx_orderfilled_new_block ON orderfilled_new (block_number);",
-    "CREATE INDEX IF NOT EXISTS idx_trades_new_market_block ON trades_new (market_id, block_number);",
-    "CREATE INDEX IF NOT EXISTS idx_quant_new_market_block ON quant_new (market_id, block_number);",
-    'CREATE INDEX IF NOT EXISTS idx_users_new_user ON users_new ("user", market_id);',
-    "CREATE INDEX IF NOT EXISTS idx_markets_new_token1 ON markets_new (token1);",
-    "CREATE INDEX IF NOT EXISTS idx_markets_new_token2 ON markets_new (token2);",
+    "CREATE INDEX IF NOT EXISTS idx_orderfilled_block ON orderfilled (block_number);",
+    "CREATE INDEX IF NOT EXISTS idx_trades_market_block ON trades (market_id, block_number);",
+    "CREATE INDEX IF NOT EXISTS idx_trades_maker ON trades (maker);",
+    "CREATE INDEX IF NOT EXISTS idx_trades_taker ON trades (taker);",
+    "CREATE INDEX IF NOT EXISTS idx_quant_market_block ON quant (market_id, block_number);",
+    'CREATE INDEX IF NOT EXISTS idx_users_user ON users ("user", market_id);',
+    "CREATE INDEX IF NOT EXISTS idx_markets_token1 ON markets (token1);",
+    "CREATE INDEX IF NOT EXISTS idx_markets_token2 ON markets (token2);",
 ]
 
-# ── Column lists for each unified view (used in parquet registration) ────
+# ── Column lists (used by import script for schema alignment) ────
 
 TABLE_COLUMNS = {
     'orderfilled': [
@@ -189,8 +189,17 @@ TABLE_COLUMNS = {
 
 
 def init_schema(conn: duckdb.DuckDBPyConnection):
-    """Create incremental tables and indexes."""
-    for ddl in NEW_TABLE_DDLS:
+    """Create tables (if not exist) and indexes."""
+    for ddl in TABLE_DDLS:
         conn.execute(ddl)
+    for idx in INDEX_DDL:
+        try:
+            conn.execute(idx)
+        except Exception:
+            pass
+
+
+def create_indexes(conn: duckdb.DuckDBPyConnection):
+    """Create indexes (separate call for post-import)."""
     for idx in INDEX_DDL:
         conn.execute(idx)

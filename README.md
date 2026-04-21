@@ -1,5 +1,3 @@
-
-
 # Polymarket Data
 
 ### Complete Data Infrastructure for Polymarket — Fetch, Process, Analyze
@@ -8,14 +6,10 @@ A comprehensive toolkit and dataset for Polymarket prediction markets. Fetch tra
 
 **Zhengjie Wang**1,2, **Leiyu Chao**1,3, **Yu Bao**1,4, **Lian Cheng**1,3, **Jianhan Liao**1,5, **Yikang Li**1,†
 
-1Shanghai Innovation Institute    2Westlake University    3Shanghai Jiao Tong University   
+1Shanghai Innovation Institute    2Westlake University    3Shanghai Jiao Tong University  
 4Harbin Institute of Technology    5Fudan University
 
 †Corresponding author
-
-
-
-
 
 ---
 
@@ -31,8 +25,8 @@ We provide **107GB of trading data** from Polymarket containing **1.1 billion re
 - **Direct Data Access**: Fetch data directly from Polygon blockchain, no third-party dependencies
 - **Multiple Formats**: 5 analysis-ready datasets for different research needs
 - **Real-time Updates**: Continuous mode to sync new data every 2 seconds
-- **Resume Support**: Auto-save progress, restart anytime without data loss
-- **Efficient Storage**: Parquet format with compression, supports incremental writes
+- **Fault-tolerant Import**: Row-group-level checkpoint, safe to interrupt and resume anytime
+- **Query API**: FastAPI + DuckDB native tables with indexes, async non-blocking queries on 100GB+ data
 
 ## vs Third-party Data Sources
 
@@ -94,7 +88,7 @@ We provide **107GB of trading data** from Polymarket containing **1.1 billion re
 ### Prerequisites
 
 - Docker and Docker Compose installed
-- ~120GB disk space (for full dataset)
+- ~120GB disk space (for parquet files + DuckDB database)
 
 ### 1. Clone and Configure
 
@@ -116,22 +110,47 @@ pip install huggingface_hub
 hf download SII-WANGZJ/Polymarket_data --repo-type dataset --local-dir data
 ```
 
-### 3. Start the Service
+Parquet files (split files like `orderfilled_part1.parquet` are supported) are auto-detected in `data/`, `data/dataset/`, and `data/data_clean/`.
+
+### 3. Import Data into DuckDB
+
+All parquet data must be imported into native DuckDB tables before the service can query it. The import script handles this with configurable resource limits:
+
+```bash
+# Default settings (4GB memory, 4 threads, 0.3s sleep between row-groups)
+docker compose run --rm --profile tools import
+
+# Conservative for busy servers (uses less CPU/memory, takes longer)
+docker compose run --rm --profile tools import --memory 2GB --threads 2 --sleep 1.0
+
+# Reset and reimport everything from scratch
+docker compose run --rm --profile tools import --reset
+```
+
+The import process:
+
+- Imports data **row-group by row-group** with configurable pacing
+- **Checkpoints** progress after each row-group — safe to interrupt and resume
+- Creates **indexes** after all data is loaded for optimal query performance
+- Handles `orderfilled_part*.parquet` split files automatically (deduplicates with `orderfilled.parquet`)
+- Validates data integrity on resume — detects DB/state mismatches and reimports if needed
+
+For 107GB of data with default settings, expect ~2–4 hours depending on disk speed.
+
+### 4. Start the Service
 
 ```bash
 docker compose up -d --build
 ```
 
-That's it — **no import step needed**. The service:
+The service:
 
-- Queries parquet files **directly** via DuckDB VIEWs (zero import, zero extra memory)
-- **Fetches** new blocks from Polygon every 2 seconds (written to lightweight `_new` tables)
+- **Queries** DuckDB native tables with indexes (fast analytical queries)
+- **Fetches** new blocks from Polygon every 2 seconds (appended to the same tables)
 - **Serves** the query API on `http://localhost:8000`
 - **Auto-restarts** if the process crashes
 
-Parquet files (split files like `orderfilled_part1.parquet` are supported) are auto-detected in `data/`, `data/dataset/`, and `data/data_clean/`.
-
-### 4. Use the API
+### 5. Use the API
 
 ```bash
 # Service status
@@ -173,8 +192,8 @@ docker compose restart
 # Rebuild after code changes
 docker compose up -d --build
 
-# Verify data availability and row counts
-docker compose run --rm --profile tools verify
+# Import (or re-import) parquet data into DuckDB
+docker compose run --rm --profile tools import
 ```
 
 ### Environment Variables
@@ -182,13 +201,13 @@ docker compose run --rm --profile tools verify
 Configure via `.env` file:
 
 
-| Variable          | Default                   | Description                            |
-| ----------------- | ------------------------- | -------------------------------------- |
-| `ALCHEMY_API_KEY` | (empty)                   | Alchemy API key for faster Polygon RPC |
-| `POLYGON_RPC_URL` | `https://polygon-rpc.com` | Custom RPC endpoint                    |
-| `API_PORT`        | `8000`                    | Host port for the API server           |
-| `BATCH_SIZE`      | `100`                     | Blocks per batch in catch-up mode      |
-| `LOG_LEVEL`       | `INFO`                    | Log level: DEBUG, INFO, WARNING, ERROR |
+| Variable          | Default                          | Description                            |
+| ----------------- | -------------------------------- | -------------------------------------- |
+| `ALCHEMY_API_KEY` | (empty)                          | Alchemy API key for faster Polygon RPC |
+| `POLYGON_RPC_URL` | `https://polygon.llamarpc.com`   | Custom RPC endpoint                    |
+| `API_PORT`        | `8000`                           | Host port for the API server           |
+| `BATCH_SIZE`      | `100`                            | Blocks per batch in catch-up mode      |
+| `LOG_LEVEL`       | `INFO`                           | Log level: DEBUG, INFO, WARNING, ERROR |
 
 
 ## API Endpoints
@@ -208,33 +227,42 @@ Configure via `.env` file:
 ## Architecture
 
 ```
-docker compose up -d
+docker compose run import                 (one-time)
+└── Import parquet → DuckDB native tables + indexes
+
+docker compose up -d                      (long-running)
 └── polymarket-data container
     ├── Fetcher Thread ── Polygon RPC ──→ INSERT INTO DuckDB
-    ├── FastAPI Server ── DuckDB SELECT ──→ JSON API
+    ├── FastAPI Server ── ThreadPool ──→ DuckDB SELECT ──→ JSON API
     └── data/polymarket.duckdb (persistent volume)
 ```
 
 - **Single container**: fetcher thread + API server in one process
-- **DuckDB**: embedded analytical database, no external DB needed
-- **Volume mount**: `./data` persists across container restarts
+- **DuckDB native tables**: all data stored in indexed DuckDB tables (not parquet views), enabling fast analytical queries on 100GB+ data
+- **Async API**: queries run in a `ThreadPoolExecutor` via `asyncio.run_in_executor()`, keeping the uvicorn event loop non-blocking
+- **Single connection**: one DuckDB connection shared by fetcher (short INSERT transactions) and API (read cursors), leveraging DuckDB MVCC for concurrent access
+- **Volume mount**: `./data` persists DuckDB database and checkpoint state across container restarts
 - **Auto-restart**: `restart: unless-stopped` policy
-- **Health check**: Docker monitors `/api/status` every 30 seconds
+- **Health check**: Docker monitors `GET /` every 30 seconds (lightweight, no DB query)
 
 ## Project Structure
 
 ```
 Polymarket_data/
 ├── polymarket/              # Core Python package
-│   ├── api/                 # FastAPI query service
+│   ├── api/                 # FastAPI query service (routes + app factory)
 │   ├── cli/                 # Command-line interface
 │   ├── db/                  # DuckDB storage layer
+│   │   ├── engine.py        #   Connection management + async query executor
+│   │   ├── schema.py        #   Table DDL, indexes, column definitions
+│   │   └── import_parquet.py#   Batch import tool (row-group checkpoint)
 │   ├── fetchers/            # Data fetchers (RPC, Gamma API)
 │   ├── processors/          # Data processors (decoder, cleaner)
 │   ├── tools/               # Utility tools (continuous fetcher)
-│   └── service.py           # Unified entry point
+│   └── service.py           # Unified entry point (fetcher + API)
 ├── data/                    # Data storage (gitignored)
-│   └── polymarket.duckdb    # DuckDB database
+│   ├── polymarket.duckdb    #   DuckDB database
+│   └── import_state.json    #   Import checkpoint (auto-managed)
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example
@@ -466,8 +494,14 @@ print(top_markets)
 pip install -r requirements.txt
 pip install -e .
 
-# Import data
+# Import parquet data into DuckDB (required before first run)
 python -m polymarket.db.import_parquet
+
+# Import with custom resource limits
+python -m polymarket.db.import_parquet --memory 2GB --threads 2 --sleep 1.0
+
+# Reset and reimport from scratch
+python -m polymarket.db.import_parquet --reset
 
 # Start service (fetcher + API)
 python -m polymarket.service --port 8000
@@ -476,6 +510,15 @@ python -m polymarket.service --port 8000
 python -m polymarket.service --no-fetcher
 python -m polymarket.service --fetcher-only
 ```
+
+Import parameters:
+
+| Parameter    | Default | Description                                             |
+| ------------ | ------- | ------------------------------------------------------- |
+| `--memory`   | `4GB`   | DuckDB memory limit during import                       |
+| `--threads`  | `4`     | DuckDB thread count during import                       |
+| `--sleep`    | `0.3`   | Sleep seconds between row-groups (throttle CPU/IO)      |
+| `--reset`    | off     | Drop all tables and reimport from scratch               |
 
 ## Contributing
 
@@ -524,9 +567,6 @@ This tool is for research and educational purposes. Users are responsible for co
 
 ---
 
-
-
 **Built for the research and data science community**
 
 [HuggingFace](https://huggingface.co/datasets/SII-WANGZJ/Polymarket_data) • [GitHub](https://github.com/SII-WANGZJ/Polymarket_data) • [Documentation](polymarket_data/DATA_DESCRIPTION.md)
-
