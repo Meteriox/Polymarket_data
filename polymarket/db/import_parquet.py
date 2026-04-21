@@ -131,16 +131,22 @@ def _insert_row_group(
     pf = pq.ParquetFile(filepath)
     rg_table = pf.read_row_group(rg_idx)
 
-    # Convert binary/large_binary columns to utf8 strings so DuckDB can
-    # cast them to the target type (e.g. BIGINT) without BLOB errors.
-    for i, field in enumerate(rg_table.schema):
-        if pa.types.is_binary(field.type) or pa.types.is_large_binary(field.type):
-            col = rg_table.column(i)
-            rg_table = rg_table.set_column(i, field.name, col.cast(pa.utf8()))
-
     source_by_canonical = {
         _canonical_col(name): name for name in rg_table.column_names
     }
+
+    # Identify which source columns have binary-like Arrow types so we can
+    # wrap them with CAST(... AS VARCHAR) in the SQL to avoid BLOB errors.
+    binary_cols: set[str] = set()
+    for field in rg_table.schema:
+        if not (pa.types.is_integer(field.type)
+                or pa.types.is_floating(field.type)
+                or pa.types.is_decimal(field.type)
+                or pa.types.is_boolean(field.type)
+                or pa.types.is_string(field.type)
+                or pa.types.is_large_string(field.type)
+                or pa.types.is_temporal(field.type)):
+            binary_cols.add(field.name)
 
     select_parts: list[str] = []
     for col in target_columns:
@@ -148,7 +154,10 @@ def _insert_row_group(
         canonical = _canonical_col(clean_col)
         if canonical in source_by_canonical:
             src = source_by_canonical[canonical]
-            select_parts.append(f'"{src}"')
+            if src in binary_cols:
+                select_parts.append(f'CAST("{src}" AS VARCHAR)')
+            else:
+                select_parts.append(f'"{src}"')
         else:
             select_parts.append("NULL")
 

@@ -201,13 +201,13 @@ docker compose --profile tools run --rm import
 Configure via `.env` file:
 
 
-| Variable          | Default                          | Description                            |
-| ----------------- | -------------------------------- | -------------------------------------- |
-| `ALCHEMY_API_KEY` | (empty)                          | Alchemy API key for faster Polygon RPC |
-| `POLYGON_RPC_URL` | `https://polygon.llamarpc.com`   | Custom RPC endpoint                    |
-| `API_PORT`        | `8000`                           | Host port for the API server           |
-| `BATCH_SIZE`      | `100`                            | Blocks per batch in catch-up mode      |
-| `LOG_LEVEL`       | `INFO`                           | Log level: DEBUG, INFO, WARNING, ERROR |
+| Variable          | Default                        | Description                            |
+| ----------------- | ------------------------------ | -------------------------------------- |
+| `ALCHEMY_API_KEY` | (empty)                        | Alchemy API key for faster Polygon RPC |
+| `POLYGON_RPC_URL` | `https://polygon.llamarpc.com` | Custom RPC endpoint                    |
+| `API_PORT`        | `8000`                         | Host port for the API server           |
+| `BATCH_SIZE`      | `100`                          | Blocks per batch in catch-up mode      |
+| `LOG_LEVEL`       | `INFO`                         | Log level: DEBUG, INFO, WARNING, ERROR |
 
 
 ## API Endpoints
@@ -513,12 +513,14 @@ python -m polymarket.service --fetcher-only
 
 Import parameters:
 
-| Parameter    | Default | Description                                             |
-| ------------ | ------- | ------------------------------------------------------- |
-| `--memory`   | `4GB`   | DuckDB memory limit during import                       |
-| `--threads`  | `4`     | DuckDB thread count during import                       |
-| `--sleep`    | `0.3`   | Sleep seconds between row-groups (throttle CPU/IO)      |
-| `--reset`    | off     | Drop all tables and reimport from scratch               |
+
+| Parameter   | Default | Description                                        |
+| ----------- | ------- | -------------------------------------------------- |
+| `--memory`  | `4GB`   | DuckDB memory limit during import                  |
+| `--threads` | `4`     | DuckDB thread count during import                  |
+| `--sleep`   | `0.3`   | Sleep seconds between row-groups (throttle CPU/IO) |
+| `--reset`   | off     | Drop all tables and reimport from scratch          |
+
 
 ## Contributing
 
