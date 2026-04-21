@@ -35,7 +35,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from polymarket.config import DATA_DIR, DATASET_DIR, DATA_CLEAN_DIR, DUCKDB_FILE
-from polymarket.db.schema import TABLE_COLUMNS, TABLE_COLUMN_TYPES, TABLE_DDLS, INDEX_DDL
+from polymarket.db.schema import TABLE_COLUMNS, TABLE_DDLS, INDEX_DDL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -124,29 +124,21 @@ def _is_binary_type(arrow_type) -> bool:
             or pa.types.is_fixed_size_binary(arrow_type))
 
 
-def _convert_binary_column(col: pa.Array, target_duckdb_type: str) -> pa.Array:
-    """Convert a binary Arrow column to a utf8 string column.
+def _convert_binary_column(col: pa.Array) -> pa.Array:
+    """Convert a binary Arrow column to a utf8 decimal-string column.
 
     Binary columns from HuggingFace parquet files contain ABI-encoded uint256
-    values (32 bytes, big-endian). We decode them to decimal or hex strings
-    and let DuckDB handle the implicit cast to the target type on INSERT.
-
-    This avoids OverflowError when uint256 values exceed int64/int128 range.
+    values (32 bytes, big-endian). We decode to decimal strings and let DuckDB
+    handle implicit casting to the target column type (VARCHAR, BIGINT, DOUBLE, etc.)
+    on INSERT.
     """
-    target_upper = target_duckdb_type.upper()
-    is_numeric = target_upper in ('BIGINT', 'INTEGER', 'HUGEINT', 'DOUBLE')
-
     converted = []
     for val in col:
         if val is None or not val.is_valid:
             converted.append(None)
         else:
             raw = val.as_py()
-            n = int.from_bytes(raw, byteorder='big', signed=False)
-            if is_numeric:
-                converted.append(str(n))
-            else:
-                converted.append('0x' + raw.hex())
+            converted.append(str(int.from_bytes(raw, byteorder='big', signed=False)))
 
     return pa.array(converted, type=pa.utf8())
 
@@ -169,22 +161,11 @@ def _insert_row_group(
     pf = pq.ParquetFile(filepath)
     rg_table = pf.read_row_group(rg_idx)
 
-    col_types = TABLE_COLUMN_TYPES.get(table, {})
-
-    # Convert binary columns to their correct types based on the DuckDB schema.
+    # Convert any binary columns to decimal strings before passing to DuckDB.
     for i, field in enumerate(rg_table.schema):
         if _is_binary_type(field.type):
-            canonical = _canonical_col(field.name)
-            target_type = None
-            for col_name, dtype in col_types.items():
-                if _canonical_col(col_name) == canonical:
-                    target_type = dtype
-                    break
-            if target_type is None:
-                target_type = 'VARCHAR'
-            col_data = rg_table.column(i)
             rg_table = rg_table.set_column(
-                i, field.name, _convert_binary_column(col_data, target_type)
+                i, field.name, _convert_binary_column(rg_table.column(i))
             )
 
     source_by_canonical = {
