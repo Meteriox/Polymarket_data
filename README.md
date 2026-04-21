@@ -118,13 +118,13 @@ All parquet data must be imported into native DuckDB tables before the service c
 
 ```bash
 # Default settings (4GB memory, 4 threads, 0.3s sleep between row-groups)
-docker compose run --rm --profile tools import
+docker compose --profile tools run --rm import
 
 # Conservative for busy servers (uses less CPU/memory, takes longer)
-docker compose run --rm --profile tools import --memory 2GB --threads 2 --sleep 1.0
+docker compose --profile tools run --rm import --memory 2GB --threads 2 --sleep 1.0
 
 # Reset and reimport everything from scratch
-docker compose run --rm --profile tools import --reset
+docker compose --profile tools run --rm import --reset
 ```
 
 The import process:
@@ -193,7 +193,7 @@ docker compose restart
 docker compose up -d --build
 
 # Import (or re-import) parquet data into DuckDB
-docker compose run --rm --profile tools import
+docker compose --profile tools run --rm import
 ```
 
 ### Environment Variables
