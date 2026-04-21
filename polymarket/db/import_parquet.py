@@ -116,22 +116,23 @@ def _canonical_col(name: str) -> str:
     return "".join(ch for ch in name.lower() if ch.isalnum())
 
 
-def _build_insert_sql(
+def _insert_row_group(
     conn: duckdb.DuckDBPyConnection,
     table: str,
-    parquet_path: str,
-    rg_start: int,
-    rg_end: int,
+    filepath: str,
+    rg_idx: int,
     target_columns: list[str],
-) -> str:
-    """Build INSERT ... SELECT that aligns parquet columns to the table schema."""
-    read_expr = (
-        f"read_parquet('{parquet_path}', "
-        f"row_group_range=({rg_start}, {rg_end}))"
-    )
+) -> int:
+    """Read one row group via PyArrow and insert into DuckDB table.
 
-    source_cols = conn.execute(f"DESCRIBE SELECT * FROM {read_expr}").fetchall()
-    source_by_canonical = {_canonical_col(name): name for name, *_ in source_cols}
+    Returns the number of rows inserted.
+    """
+    pf = pq.ParquetFile(filepath)
+    rg_table = pf.read_row_group(rg_idx)
+
+    source_by_canonical = {
+        _canonical_col(name): name for name in rg_table.column_names
+    }
 
     select_parts: list[str] = []
     for col in target_columns:
@@ -146,7 +147,12 @@ def _build_insert_sql(
     col_list = ", ".join(f'"{c.strip(chr(34))}"' for c in target_columns)
     select_list = ", ".join(select_parts)
 
-    return f"INSERT INTO {table} ({col_list}) SELECT {select_list} FROM {read_expr}"
+    sql = f"INSERT INTO {table} ({col_list}) SELECT {select_list} FROM rg_table"
+    conn.execute(sql)
+
+    num_rows = rg_table.num_rows
+    del rg_table
+    return num_rows
 
 
 def import_table(
@@ -233,14 +239,11 @@ def import_table(
             continue
 
         start_rg = resume_rg_idx if file_idx == resume_file_idx else 0
-        parquet_path = str(filepath).replace("'", "''")
 
         for rg_idx in range(start_rg, num_rg):
-            sql = _build_insert_sql(
-                conn, table, parquet_path, rg_idx, rg_idx + 1, target_columns
+            batch_rows = _insert_row_group(
+                conn, table, str(filepath), rg_idx, target_columns
             )
-            result = conn.execute(sql).fetchone()
-            batch_rows = result[0] if result else 0
             total_rows_imported += batch_rows
             processed_rg += 1
             current_rg = done_rg + processed_rg
