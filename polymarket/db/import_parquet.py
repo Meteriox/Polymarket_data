@@ -35,7 +35,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from polymarket.config import DATA_DIR, DATASET_DIR, DATA_CLEAN_DIR, DUCKDB_FILE
-from polymarket.db.schema import TABLE_COLUMNS, TABLE_DDLS, INDEX_DDL
+from polymarket.db.schema import TABLE_COLUMNS, TABLE_COLUMN_TYPES, TABLE_DDLS, INDEX_DDL
 
 logging.basicConfig(
     level=logging.INFO,
@@ -117,6 +117,51 @@ def _canonical_col(name: str) -> str:
     return "".join(ch for ch in name.lower() if ch.isalnum())
 
 
+def _is_binary_type(arrow_type) -> bool:
+    """Check if an Arrow type is any form of binary (binary, large_binary, fixed_size_binary)."""
+    return (pa.types.is_binary(arrow_type)
+            or pa.types.is_large_binary(arrow_type)
+            or pa.types.is_fixed_size_binary(arrow_type))
+
+
+def _convert_binary_column(col: pa.Array, target_duckdb_type: str) -> pa.Array:
+    """Convert a binary Arrow column to the appropriate type based on the DuckDB target.
+
+    Binary columns from HuggingFace parquet files may contain:
+    - ABI-encoded uint256 values (32 bytes, big-endian) for numeric fields
+    - Raw bytes for hash/address fields that should be hex strings
+    """
+    target_upper = target_duckdb_type.upper()
+
+    if target_upper in ('BIGINT', 'INTEGER', 'DOUBLE'):
+        converted = []
+        for val in col:
+            if val is None or not val.is_valid:
+                converted.append(None)
+            else:
+                raw = val.as_py()
+                n = int.from_bytes(raw, byteorder='big', signed=False)
+                if target_upper == 'DOUBLE':
+                    converted.append(float(n))
+                else:
+                    converted.append(n)
+            
+        if target_upper == 'DOUBLE':
+            return pa.array(converted, type=pa.float64())
+        return pa.array(converted, type=pa.int64())
+
+    # VARCHAR / BOOLEAN / anything else: decode as hex string
+    converted = []
+    for val in col:
+        if val is None or not val.is_valid:
+            converted.append(None)
+        else:
+            raw = val.as_py()
+            converted.append('0x' + raw.hex())
+
+    return pa.array(converted, type=pa.utf8())
+
+
 def _insert_row_group(
     conn: duckdb.DuckDBPyConnection,
     table: str,
@@ -126,27 +171,36 @@ def _insert_row_group(
 ) -> int:
     """Read one row group via PyArrow and insert into DuckDB table.
 
+    Handles type mismatches between parquet files (especially HuggingFace
+    historical data) and the DuckDB schema by converting binary columns
+    in-memory before insertion.
+
     Returns the number of rows inserted.
     """
     pf = pq.ParquetFile(filepath)
     rg_table = pf.read_row_group(rg_idx)
 
+    col_types = TABLE_COLUMN_TYPES.get(table, {})
+
+    # Convert binary columns to their correct types based on the DuckDB schema.
+    for i, field in enumerate(rg_table.schema):
+        if _is_binary_type(field.type):
+            canonical = _canonical_col(field.name)
+            target_type = None
+            for col_name, dtype in col_types.items():
+                if _canonical_col(col_name) == canonical:
+                    target_type = dtype
+                    break
+            if target_type is None:
+                target_type = 'VARCHAR'
+            col_data = rg_table.column(i)
+            rg_table = rg_table.set_column(
+                i, field.name, _convert_binary_column(col_data, target_type)
+            )
+
     source_by_canonical = {
         _canonical_col(name): name for name in rg_table.column_names
     }
-
-    # Identify which source columns have binary-like Arrow types so we can
-    # wrap them with CAST(... AS VARCHAR) in the SQL to avoid BLOB errors.
-    binary_cols: set[str] = set()
-    for field in rg_table.schema:
-        if not (pa.types.is_integer(field.type)
-                or pa.types.is_floating(field.type)
-                or pa.types.is_decimal(field.type)
-                or pa.types.is_boolean(field.type)
-                or pa.types.is_string(field.type)
-                or pa.types.is_large_string(field.type)
-                or pa.types.is_temporal(field.type)):
-            binary_cols.add(field.name)
 
     select_parts: list[str] = []
     for col in target_columns:
@@ -154,10 +208,7 @@ def _insert_row_group(
         canonical = _canonical_col(clean_col)
         if canonical in source_by_canonical:
             src = source_by_canonical[canonical]
-            if src in binary_cols:
-                select_parts.append(f'CAST("{src}" AS VARCHAR)')
-            else:
-                select_parts.append(f'"{src}"')
+            select_parts.append(f'"{src}"')
         else:
             select_parts.append("NULL")
 
