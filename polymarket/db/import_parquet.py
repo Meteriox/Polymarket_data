@@ -31,6 +31,7 @@ from datetime import datetime
 from pathlib import Path
 
 import duckdb
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from polymarket.config import DATA_DIR, DATASET_DIR, DATA_CLEAN_DIR, DUCKDB_FILE
@@ -129,6 +130,13 @@ def _insert_row_group(
     """
     pf = pq.ParquetFile(filepath)
     rg_table = pf.read_row_group(rg_idx)
+
+    # Convert binary/large_binary columns to utf8 strings so DuckDB can
+    # cast them to the target type (e.g. BIGINT) without BLOB errors.
+    for i, field in enumerate(rg_table.schema):
+        if pa.types.is_binary(field.type) or pa.types.is_large_binary(field.type):
+            col = rg_table.column(i)
+            rg_table = rg_table.set_column(i, field.name, col.cast(pa.utf8()))
 
     source_by_canonical = {
         _canonical_col(name): name for name in rg_table.column_names
